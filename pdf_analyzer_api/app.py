@@ -14,6 +14,11 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = config.UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_FILE_SIZE
 
+# --- Pre-run Setup: Ensure all necessary folders exist ---
+os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(config.CONVERSION_FOLDER, exist_ok=True)
+os.makedirs(config.LOG_FOLDER, exist_ok=True)
+
 # --- Logging Configuration ---
 logging.basicConfig(
     level=logging.INFO,
@@ -85,8 +90,4 @@ def serve_conversion(filepath):
     return send_from_directory(config.CONVERSION_FOLDER, filepath)
 
 if __name__ == '__main__':
-    # Ensure all necessary folders exist
-    os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
-    os.makedirs(config.CONVERSION_FOLDER, exist_ok=True)
-    os.makedirs(config.LOG_FOLDER, exist_ok=True)
     app.run(debug=True)
