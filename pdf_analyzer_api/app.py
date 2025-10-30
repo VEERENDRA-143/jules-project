@@ -7,7 +7,6 @@ import logging
 
 import config
 import analyzer
-import gemini_service
 
 # --- App Initialization ---
 app = Flask(__name__)
@@ -38,10 +37,8 @@ def allowed_file(filename):
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
-    gemini_status = "connected" if gemini_service.gemini_model else "disconnected"
     return jsonify({
         "status": "healthy",
-        "gemini_api": gemini_status,
         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ')
     }), 200
 
