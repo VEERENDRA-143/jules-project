@@ -15,7 +15,8 @@ app.config['MAX_CONTENT_LENGTH'] = config.MAX_FILE_SIZE
 
 # --- Pre-run Setup: Ensure all necessary folders exist ---
 os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(config.CONVERSION_FOLDER, exist_ok=True)
+os.makedirs(config.DIGITAL_FOLDER, exist_ok=True)
+os.makedirs(config.SCANNED_FOLDER, exist_ok=True)
 os.makedirs(config.LOG_FOLDER, exist_ok=True)
 
 # --- Logging Configuration ---
@@ -81,10 +82,15 @@ def analyze_document():
         logger.warning(f"Analyze request failed: File type not allowed ('{file.filename}').")
         return jsonify({"status": "error", "message": "File type not allowed."}), 400
 
-@app.route('/conversions/<path:filepath>')
-def serve_conversion(filepath):
+@app.route('/scanned/<path:filepath>')
+def serve_scanned_file(filepath):
     """Serve generated PNG images for scanned pages."""
-    return send_from_directory(config.CONVERSION_FOLDER, filepath)
+    return send_from_directory(config.SCANNED_FOLDER, filepath)
+
+@app.route('/digital/<path:filepath>')
+def serve_digital_file(filepath):
+    """Serve extracted text files for digital pages."""
+    return send_from_directory(config.DIGITAL_FOLDER, filepath)
 
 if __name__ == '__main__':
     app.run(debug=True)
