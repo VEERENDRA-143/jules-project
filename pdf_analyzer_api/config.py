@@ -6,9 +6,13 @@ load_dotenv()
 # Base directories
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
-DIGITAL_FOLDER = os.path.join(BASE_DIR, 'digital')
-SCANNED_FOLDER = os.path.join(BASE_DIR, 'scanned')
 LOG_FOLDER = os.path.join(BASE_DIR, 'logs')
+
+# Output directories
+OUTPUT_BASE_FOLDER = os.path.join(BASE_DIR, 'output')
+DIGITAL_NATIVE_FOLDER = os.path.join(OUTPUT_BASE_FOLDER, 'digital_native')
+SCANNED_OCR_FOLDER = os.path.join(OUTPUT_BASE_FOLDER, 'scanned_ocr')
+SCANNED_IMAGE_ONLY_FOLDER = os.path.join(OUTPUT_BASE_FOLDER, 'scanned_image_only')
 
 # File constraints
 ALLOWED_EXTENSIONS = {'pdf'}

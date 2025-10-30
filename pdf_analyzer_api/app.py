@@ -15,9 +15,10 @@ app.config['MAX_CONTENT_LENGTH'] = config.MAX_FILE_SIZE
 
 # --- Pre-run Setup: Ensure all necessary folders exist ---
 os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(config.DIGITAL_FOLDER, exist_ok=True)
-os.makedirs(config.SCANNED_FOLDER, exist_ok=True)
 os.makedirs(config.LOG_FOLDER, exist_ok=True)
+os.makedirs(config.DIGITAL_NATIVE_FOLDER, exist_ok=True)
+os.makedirs(config.SCANNED_OCR_FOLDER, exist_ok=True)
+os.makedirs(config.SCANNED_IMAGE_ONLY_FOLDER, exist_ok=True)
 
 # --- Logging Configuration ---
 logging.basicConfig(
@@ -82,15 +83,23 @@ def analyze_document():
         logger.warning(f"Analyze request failed: File type not allowed ('{file.filename}').")
         return jsonify({"status": "error", "message": "File type not allowed."}), 400
 
-@app.route('/scanned/<path:filepath>')
-def serve_scanned_file(filepath):
-    """Serve generated PNG images for scanned pages."""
-    return send_from_directory(config.SCANNED_FOLDER, filepath)
+@app.route('/output/<folder>/<subfolder>/<filename>')
+def serve_output_file(folder, subfolder, filename):
+    """Serve files from the output directories."""
+    # Construct the path safely
+    directory_map = {
+        "digital_native": config.DIGITAL_NATIVE_FOLDER,
+        "scanned_ocr": config.SCANNED_OCR_FOLDER,
+        "scanned_image_only": config.SCANNED_IMAGE_ONLY_FOLDER,
+    }
 
-@app.route('/digital/<path:filepath>')
-def serve_digital_file(filepath):
-    """Serve extracted text files for digital pages."""
-    return send_from_directory(config.DIGITAL_FOLDER, filepath)
+    base_path = directory_map.get(folder)
+    if not base_path:
+        return "Invalid category", 404
+
+    # Reconstruct the full path to the file
+    full_path = os.path.join(base_path, subfolder)
+    return send_from_directory(full_path, filename)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -10,69 +10,53 @@ def clean_filename(filename):
     """Remove special characters and limit length for safe file/folder names."""
     return re.sub(r'[^a-zA-Z0-9_-]', '', filename.split('.')[0])[:50]
 
-def is_page_scanned(page, threshold=0.7):
+def classify_page(page):
     """
-    Determines if a page is scanned by checking for large images.
+    Analyzes a single PDF page to determine if it is digital native,
+    scanned+OCR, or image-only.
 
     Args:
         page (fitz.Page): The PyMuPDF page object.
-        threshold (float): The area ratio an image must exceed to be considered a full-page scan.
 
     Returns:
-        bool: True if the page is likely scanned, False otherwise.
+        str: The classification type ('digital_native', 'scanned_ocr', 'scanned_image_only').
     """
-    page_area = page.rect.width * page.rect.height
-    if page_area == 0:
-        return False
+    has_text = len(page.get_text().strip()) > 0
+    is_scanned = False
 
-    image_list = page.get_images(full=True)
-    if not image_list:
-        return False
+    images = page.get_images(full=True)
+    if images:
+        page_area = page.rect.width * page.rect.height
+        if page_area > 0:
+            for img_info in images:
+                img_bbox = page.get_image_bbox(img_info)
+                img_area = img_bbox.width * img_bbox.height
+                # If an image takes up > 90% of the page, it's likely a full-page scan
+                if img_area / page_area > 0.90:
+                    is_scanned = True
+                    break
 
-    for img_info in image_list:
-        # Get the image's bounding box in the page
-        img_bbox = page.get_image_bbox(img_info)
-        img_area = (img_bbox.x1 - img_bbox.x0) * (img_bbox.y1 - img_bbox.y0)
+    # --- Final Logic ---
+    if has_text and is_scanned:
+        return "scanned_ocr"
+    elif has_text and not is_scanned:
+        return "digital_native"
+    else: # This covers "not has_text" cases
+        return "scanned_image_only"
 
-        if img_area / page_area > threshold:
-            return True
-
-    return False
-
-def save_digital_text(page, output_folder, page_number):
-    """
-    Extracts text from a digital page and saves it to a .txt file.
-
-    Args:
-        page (fitz.Page): The PyMuPDF page object.
-        output_folder (str): The directory to save the text file in.
-        page_number (int): The current page number.
-
-    Returns:
-        str: The web-accessible path to the saved text file.
-    """
-    text = page.get_text()
+def save_text_output(page, output_folder, page_number):
+    """Saves extracted text to a .txt file."""
+    text = page.get_text("text")
     txt_filename = f"page_{page_number:03d}.txt"
     txt_path = os.path.join(output_folder, txt_filename)
 
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(text)
 
-    return os.path.join('digital', os.path.basename(output_folder), txt_filename)
+    return txt_path
 
-
-def save_scanned_image(page, output_folder, page_number):
-    """
-    Converts a scanned page to a PNG image and saves it.
-
-    Args:
-        page (fitz.Page): The PyMuPDF page object.
-        output_folder (str): The directory to save the image in.
-        page_number (int): The current page number.
-
-    Returns:
-        str: The web-accessible path to the saved image.
-    """
+def save_image_output(page, output_folder, page_number):
+    """Saves a rendered page as a PNG image."""
     zoom = config.IMAGE_DPI / 72.0
     matrix = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=matrix, alpha=False)
@@ -81,13 +65,12 @@ def save_scanned_image(page, output_folder, page_number):
     image_path = os.path.join(output_folder, image_filename)
 
     pix.save(image_path)
-    return os.path.join('scanned', os.path.basename(output_folder), image_filename)
-
+    return image_path
 
 def analyze_pdf(pdf_path, original_filename):
     """
-    Analyzes a PDF to classify pages as digital or scanned, saving the
-    appropriate output to structured folders.
+    Analyzes a PDF, classifies each page, and saves the appropriate
+    output to a structured directory.
     """
     start_time = time.time()
 
@@ -101,34 +84,43 @@ def analyze_pdf(pdf_path, original_filename):
     safe_filename = clean_filename(original_filename)
     folder_name = f"{unique_id}_{safe_filename}"
 
-    digital_output_folder = os.path.join(config.DIGITAL_FOLDER, folder_name)
-    scanned_output_folder = os.path.join(config.SCANNED_FOLDER, folder_name)
-
-    # Ensure they exist
-    os.makedirs(digital_output_folder, exist_ok=True)
-    os.makedirs(scanned_output_folder, exist_ok=True)
-
     page_results = []
-    digital_count = 0
-    scanned_count = 0
+    summary = {
+        "digital_native": 0,
+        "scanned_ocr": 0,
+        "scanned_image_only": 0
+    }
 
     for page_num in range(len(doc)):
         page = doc[page_num]
-
         page_number = page_num + 1
-        scanned = is_page_scanned(page)
+
+        page_type = classify_page(page)
+        summary[page_type] += 1
 
         page_data = {
             "page_number": page_number,
-            "type": "scanned" if scanned else "digital"
+            "type": page_type,
         }
 
-        if scanned:
-            scanned_count += 1
-            page_data["output_path"] = save_scanned_image(page, scanned_output_folder, page_number)
-        else:
-            digital_count += 1
-            page_data["output_path"] = save_digital_text(page, digital_output_folder, page_number)
+        # Determine output path and save the file
+        if page_type == 'digital_native':
+            output_folder = os.path.join(config.DIGITAL_NATIVE_FOLDER, folder_name)
+            os.makedirs(output_folder, exist_ok=True)
+            save_text_output(page, output_folder, page_number)
+            page_data["output_path"] = os.path.join('output', 'digital_native', folder_name, f"page_{page_number:03d}.txt")
+
+        elif page_type == 'scanned_ocr':
+            output_folder = os.path.join(config.SCANNED_OCR_FOLDER, folder_name)
+            os.makedirs(output_folder, exist_ok=True)
+            save_text_output(page, output_folder, page_number)
+            page_data["output_path"] = os.path.join('output', 'scanned_ocr', folder_name, f"page_{page_number:03d}.txt")
+
+        elif page_type == 'scanned_image_only':
+            output_folder = os.path.join(config.SCANNED_IMAGE_ONLY_FOLDER, folder_name)
+            os.makedirs(output_folder, exist_ok=True)
+            save_image_output(page, output_folder, page_number)
+            page_data["output_path"] = os.path.join('output', 'scanned_image_only', folder_name, f"page_{page_number:03d}.png")
 
         page_results.append(page_data)
 
@@ -140,8 +132,7 @@ def analyze_pdf(pdf_path, original_filename):
         "status": "success",
         "filename": original_filename,
         "total_pages": len(page_results),
-        "digital_pages": digital_count,
-        "scanned_pages": scanned_count,
+        "page_counts": summary,
         "processing_time": f"{processing_time}s",
         "pages": page_results
     }
